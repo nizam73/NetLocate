@@ -5,18 +5,18 @@
 // ============================================================
 
 const FIREBASE_CONFIG = {
-  apiKey:            "YOUR_API_KEY",
-  authDomain:        "YOUR_AUTH_DOMAIN",
-  projectId:         "YOUR_PROJECT_ID",
-  storageBucket:     "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId:             "YOUR_APP_ID"
+  apiKey: "AIzaSyB4rVF1bA7JSbFKWpyX4GbDtyrdRs7HzOU",
+  authDomain: "netlocate-88bdb.firebaseapp.com",
+  projectId: "netlocate-88bdb",
+  storageBucket: "netlocate-88bdb.firebasestorage.app",
+  messagingSenderId: "400237525037",
+  appId: "1:400237525037:web:cf1af22da6f7c3a01fe0a4"
 };
 
 // List of admin email addresses (case-insensitive check)
 // These users will have access to the Admin Panel.
 const ADMIN_EMAILS = [
-  "admin@example.com",
+  "ahmed.nizam73@gmail.com",
   // add more admin emails here
 ];
 
