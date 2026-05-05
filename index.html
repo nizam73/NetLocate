@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NetLocate – ISP Coverage Finder</title>
+  <meta name="description" content="Check broadband availability in your area across Bangladesh" />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Leaflet MarkerCluster CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- ===== TOP BAR ===== -->
+  <header class="topbar">
+    <div class="topbar-logo">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <circle cx="14" cy="14" r="13" stroke="var(--accent)" stroke-width="2"/>
+        <circle cx="14" cy="14" r="6" fill="var(--accent)" opacity="0.3"/>
+        <circle cx="14" cy="14" r="3" fill="var(--accent)"/>
+        <line x1="14" y1="1" x2="14" y2="5" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="14" y1="23" x2="14" y2="27" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="1" y1="14" x2="5" y2="14" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="23" y1="14" x2="27" y2="14" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span class="logo-text">Net<b>Locate</b></span>
+    </div>
+
+    <div class="search-wrap">
+      <svg class="search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M10.5 10.5L14.5 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <input type="text" id="searchInput" placeholder="Search address, area or district…" autocomplete="off" />
+      <button id="searchBtn" class="btn-icon" title="Search">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2 7H12M8 3L12 7L8 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="topbar-actions">
+      <div id="userStatus" class="user-status">
+        <button id="loginBtn" class="btn-outline btn-sm">Sign In</button>
+      </div>
+      <button id="menuBtn" class="btn-icon menu-btn" title="More">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <circle cx="9" cy="4" r="1.5" fill="currentColor"/>
+          <circle cx="9" cy="9" r="1.5" fill="currentColor"/>
+          <circle cx="9" cy="14" r="1.5" fill="currentColor"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== MAP ===== -->
+  <div id="map"></div>
+
+  <!-- ===== FAB: MY LOCATION ===== -->
+  <button id="locateBtn" class="fab" title="Use my location">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <circle cx="10" cy="10" r="3" fill="currentColor"/>
+      <circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="10" y1="1" x2="10" y2="3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="10" y1="17" x2="10" y2="19" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="1" y1="10" x2="3" y2="10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="17" y1="10" x2="19" y2="10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <span>My Location</span>
+  </button>
+
+  <!-- ===== BOTTOM SHEET (Mobile popup) ===== -->
+  <div id="bottomSheet" class="bottom-sheet hidden">
+    <div class="sheet-handle"></div>
+    <div class="sheet-body">
+      <div id="coverageStatus" class="coverage-badge"></div>
+      <h3 id="sheetAddress" class="sheet-address">Fetching address…</h3>
+      <div class="sheet-coords">
+        <span id="sheetLat">–</span>
+        <span id="sheetLng">–</span>
+      </div>
+      <div id="nearestDP" class="nearest-dp hidden"></div>
+      <button id="applyBtn" class="btn-primary btn-full">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M2 8H14M10 4L14 8L10 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Apply for Connection
+      </button>
+      <button id="closeSheet" class="btn-ghost btn-full">Dismiss</button>
+    </div>
+  </div>
+
+  <!-- ===== CONFIRM MODAL ===== -->
+  <div id="confirmModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Confirm Application</h2>
+        <button id="closeConfirm" class="btn-icon">✕</button>
+      </div>
+      <div id="miniMap" class="mini-map"></div>
+      <div class="modal-body">
+        <div id="confirmAddress" class="confirm-address"></div>
+        <div id="confirmCoords" class="confirm-coords"></div>
+        <div id="confirmStatus" class="coverage-badge sm"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="confirmApplyBtn" class="btn-primary btn-full">
+          ✅ Confirm আবেদন
+        </button>
+        <p class="modal-note">Your application will be reviewed by our team.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MORE MENU ===== -->
+  <div id="moreMenu" class="dropdown-menu hidden">
+    <a href="admin/admin.html" class="menu-item">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+        <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+        <rect x="9" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+        <rect x="1" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+        <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+      </svg>
+      Admin Panel
+    </a>
+    <a href="#" id="menuMyApps" class="menu-item">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+        <path d="M2 3H13M2 7H13M2 11H8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      </svg>
+      My Applications
+    </a>
+    <hr class="menu-divider"/>
+    <a href="#" id="menuSignOut" class="menu-item text-danger hidden">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+        <path d="M6 2H2V13H6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        <path d="M10 5L13 7.5L10 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="6" y1="7.5" x2="13" y2="7.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      </svg>
+      Sign Out
+    </a>
+  </div>
+
+  <!-- ===== MY APPLICATIONS MODAL ===== -->
+  <div id="myAppsModal" class="modal-overlay hidden">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h2>My Applications</h2>
+        <button id="closeMyApps" class="btn-icon">✕</button>
+      </div>
+      <div id="appsList" class="apps-list">
+        <div class="loading-spin"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TOAST ===== -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- ===== LOADING OVERLAY ===== -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loader-box">
+      <div class="pulse-ring"></div>
+      <div class="pulse-ring delay1"></div>
+      <div class="pulse-ring delay2"></div>
+      <p>Loading NetLocate…</p>
+    </div>
+  </div>
+
+  <!-- Firebase SDK (v9 compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <!-- App scripts -->
+  <script src="js/firebase-config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

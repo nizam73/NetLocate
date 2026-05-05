@@ -1,0 +1,83 @@
+// firestore.rules
+// Deploy with: firebase deploy --only firestore:rules
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ──────────────────────────────────
+
+    // Is the requesting user authenticated?
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Is the requesting user the document owner?
+    function isOwner(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+
+    // Is the requesting user an admin?
+    // Admin emails are stored in /admins/{email} with role field.
+    function isAdmin() {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email));
+    }
+
+    // ── Collection: distribution_points ──────────────────
+    match /distribution_points/{dpId} {
+      // Anyone can read DP locations (public coverage map)
+      allow read: if true;
+
+      // Only admins can create, update, delete DPs
+      allow write: if isAdmin();
+    }
+
+    // ── Collection: applications ──────────────────────────
+    match /applications/{appId} {
+      // Authenticated users can create applications
+      allow create: if isAuth()
+        && request.resource.data.user_id == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.lat is number
+        && request.resource.data.lng is number;
+
+      // Users can read their own applications; admins can read all
+      allow read: if isOwner(resource.data.user_id) || isAdmin();
+
+      // Only admins can update (change status)
+      allow update: if isAdmin();
+
+      // Only admins can delete
+      allow delete: if isAdmin();
+    }
+
+    // ── Collection: users ────────────────────────────────
+    match /users/{userId} {
+      // Users can read/write their own profile only
+      allow read, write: if isOwner(userId);
+
+      // Admins can read any user profile
+      allow read: if isAdmin();
+    }
+
+    // ── Collection: admins ───────────────────────────────
+    match /admins/{email} {
+      // Only admins can read the admin list
+      allow read: if isAdmin();
+
+      // No client-side writes — manage via Firebase Console
+      allow write: if false;
+    }
+
+    // ── Collection: settings ─────────────────────────────
+    match /settings/{doc} {
+      // Anyone can read global settings (e.g. default radius)
+      allow read: if true;
+
+      // Only admins can write settings
+      allow write: if isAdmin();
+    }
+  }
+}
