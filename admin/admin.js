@@ -574,10 +574,20 @@ async function loadSettings() {
 }
 
 function wireSettingsHandlers() {
-  document.getElementById('saveRadiusBtn').addEventListener('click', async () => {
-    const val = parseInt(document.getElementById('globalRadius').value, 10);
+  const saveBtn  = document.getElementById('saveRadiusBtn');
+  const resetBtn = document.getElementById('resetRadiusBtn');
+
+  if (!saveBtn || !resetBtn) {
+    console.error('Settings buttons not found in DOM');
+    return;
+  }
+
+  saveBtn.addEventListener('click', async () => {
+    const input = document.getElementById('globalRadius');
+    const val = parseInt(input.value, 10);
     if (isNaN(val) || val < 10 || val > 5000) {
-      showToast('Enter a value between 10 and 5000', 'error'); return;
+      showToast('Enter a value between 10 and 5000', 'error');
+      return;
     }
     try {
       await db.collection(COL_SETTINGS).doc('global').set({ defaultRadius: val }, { merge: true });
@@ -587,7 +597,7 @@ function wireSettingsHandlers() {
     }
   });
 
-  document.getElementById('resetRadiusBtn').addEventListener('click', async () => {
+  resetBtn.addEventListener('click', async () => {
     document.getElementById('globalRadius').value = 100;
     try {
       await db.collection(COL_SETTINGS).doc('global').set({ defaultRadius: 100 }, { merge: true });
