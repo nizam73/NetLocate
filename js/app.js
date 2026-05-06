@@ -35,6 +35,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const geo    = MapModule._lastGeo;
     if (!latLng) return;
 
+    // Clear phone field each time modal opens
+    document.getElementById('phoneInput').value = '';
+
     // Populate modal
     document.getElementById('confirmAddress').textContent = geo?.display || `${latLng.lat.toFixed(5)}, ${latLng.lng.toFixed(5)}`;
     document.getElementById('confirmCoords').textContent  = `${latLng.lat.toFixed(6)}°N, ${latLng.lng.toFixed(6)}°E`;
@@ -75,6 +78,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!user || !latLng) return;
 
+    // ── Phone validation ──────────────────────────────────
+    const rawPhone = document.getElementById('phoneInput').value.trim();
+    if (!rawPhone) {
+      showToast('📞 Please enter your mobile number', 'error');
+      document.getElementById('phoneInput').focus();
+      return;
+    }
+    // BD mobile: 10 digits starting with 1, second digit 3-9
+    const phoneRegex = /^1[3-9]\d{8}$/;
+    if (!phoneRegex.test(rawPhone)) {
+      showToast('Enter a valid Bangladesh number (e.g. 1712345678)', 'error');
+      document.getElementById('phoneInput').focus();
+      return;
+    }
+    const fullPhone = '+880' + rawPhone;
+
     // Basic rate-limit: prevent double-submit
     submitting = true;
     const btn = document.getElementById('confirmApplyBtn');
@@ -109,18 +128,20 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       await db.collection(COL_APPLICATIONS).add({
-        user_id:   user.uid,
-        user_name: user.displayName,
-        user_email:user.email,
-        lat:       latLng.lat,
-        lng:       latLng.lng,
-        address:   geo?.display || '',
-        street:    geo?.street  || '',
-        area:      geo?.area    || '',
-        district:  geo?.district|| '',
-        division:  geo?.division|| '',
-        status:    'pending',
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        user_id:      user.uid,
+        user_name:    user.displayName,
+        user_email:   user.email,
+        phone:        fullPhone,
+        lat:          latLng.lat,
+        lng:          latLng.lng,
+        address:      geo?.display  || '',
+        street:       geo?.street   || '',
+        area:         geo?.area     || '',
+        district:     geo?.district || '',
+        division:     geo?.division || '',
+        coverage:     MapModule._lastCoverage?.available ? 'available' : 'unavailable',
+        status:       'pending',
+        timestamp:    firebase.firestore.FieldValue.serverTimestamp()
       });
 
       document.getElementById('confirmModal').classList.add('hidden');
@@ -169,7 +190,6 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const snap = await db.collection(COL_APPLICATIONS)
         .where('user_id', '==', user.uid)
-        .orderBy('timestamp', 'desc')
         .limit(20)
         .get();
 
@@ -178,10 +198,17 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      // Sort client-side by timestamp descending
+      const docs = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
       list.innerHTML = '';
-      snap.forEach(doc => {
-        const d = doc.data();
+      docs.forEach(d => {
         const date = d.timestamp?.toDate?.()?.toLocaleDateString('en-BD', { day:'numeric',month:'short',year:'numeric' }) || '–';
+        const covBadge = d.coverage === 'available'
+          ? `<span class="status-pill approved">✅ Available</span>`
+          : `<span class="status-pill rejected">❌ Unavailable</span>`;
         const card = document.createElement('div');
         card.className = 'app-card';
         card.innerHTML = `
@@ -189,6 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="app-card-meta">
             <span class="app-card-date">📅 ${date}</span>
             <span class="status-pill ${d.status || 'pending'}">${d.status || 'pending'}</span>
+            ${covBadge}
           </div>
         `;
         list.appendChild(card);
