@@ -82,24 +82,25 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.disabled = true;
 
     try {
-      // Check if user already has a pending application at ~same location
+      // Check if user already has a pending application (no composite index needed)
       const recent = await db.collection(COL_APPLICATIONS)
         .where('user_id', '==', user.uid)
-        .where('status', '==', 'pending')
         .orderBy('timestamp', 'desc')
-        .limit(1)
+        .limit(5)
         .get();
 
       if (!recent.empty) {
-        const lastDoc  = recent.docs[0].data();
-        const lastTime = lastDoc.timestamp?.toDate?.() || new Date(0);
-        const minsSince = (Date.now() - lastTime.getTime()) / 60000;
-        if (minsSince < 30) {
-          showToast('You already have a pending application. Please wait 30 minutes.', 'error');
-          submitting = false;
-          btn.textContent = '✅ Confirm আবেদন';
-          btn.disabled = false;
-          return;
+        const pending = recent.docs.find(d => d.data().status === 'pending');
+        if (pending) {
+          const lastTime = pending.data().timestamp?.toDate?.() || new Date(0);
+          const minsSince = (Date.now() - lastTime.getTime()) / 60000;
+          if (minsSince < 30) {
+            showToast('You already have a pending application. Please wait 30 minutes.', 'error');
+            submitting = false;
+            btn.textContent = '✅ Confirm আবেদন';
+            btn.disabled = false;
+            return;
+          }
         }
       }
 
