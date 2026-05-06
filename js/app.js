@@ -82,17 +82,21 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.disabled = true;
 
     try {
-      // Check if user already has a pending application (no composite index needed)
+      // Rate-limit: single-field query only (no index required)
       const recent = await db.collection(COL_APPLICATIONS)
         .where('user_id', '==', user.uid)
-        .orderBy('timestamp', 'desc')
-        .limit(5)
+        .limit(10)
         .get();
 
       if (!recent.empty) {
-        const pending = recent.docs.find(d => d.data().status === 'pending');
+        // Find the most recent pending application by sorting client-side
+        const pending = recent.docs
+          .map(d => d.data())
+          .filter(d => d.status === 'pending')
+          .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+
         if (pending) {
-          const lastTime = pending.data().timestamp?.toDate?.() || new Date(0);
+          const lastTime = pending.timestamp?.toDate?.() || new Date(0);
           const minsSince = (Date.now() - lastTime.getTime()) / 60000;
           if (minsSince < 30) {
             showToast('You already have a pending application. Please wait 30 minutes.', 'error');
