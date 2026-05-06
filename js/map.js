@@ -105,7 +105,7 @@ const MapModule = (() => {
     });
 
     // Dark tile layer
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; CartoDB',
       maxZoom: 19
     }).addTo(map);
@@ -167,14 +167,14 @@ const MapModule = (() => {
 
         const radius = data.radius || 100;
 
-        // Coverage circle
+        // Coverage circle — stroke only, no fill, subtle dashed ring
         const circle = L.circle([data.lat, data.lng], {
           radius,
-          color:     '#0099ff',
-          fillColor: '#0099ff',
-          fillOpacity: 0.08,
-          weight: 1.5,
-          opacity: 0.5
+          color:       '#00d4aa',
+          fill:        false,
+          weight:      1,
+          opacity:     0.25,
+          dashArray:   '4 6',
         }).addTo(map);
 
         // DP marker
