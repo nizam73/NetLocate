@@ -310,7 +310,7 @@ const MapModule = (() => {
   function initMiniMap(lat, lng) {
     if (miniMap) { miniMap.remove(); miniMap = null; }
     miniMap = L.map('miniMap', { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(miniMap);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(miniMap);
     miniMap.setView([lat, lng], 16);
     L.marker([lat, lng]).addTo(miniMap);
 
