@@ -80,6 +80,7 @@ function initDashboard() {
       if (btn.dataset.tab === 'dps')          loadDPs();
       if (btn.dataset.tab === 'applications') loadApplications();
       if (btn.dataset.tab === 'settings')     loadSettings();
+      if (btn.dataset.tab === 'bulk')         initBulkUpload();
     });
   });
 
@@ -287,15 +288,23 @@ async function loadApplications() {
       const d = { id: doc.id, ...doc.data() };
       const date = d.timestamp?.toDate?.()?.toLocaleString('en-BD') || '–';
 
+      const covBadge = d.coverage === 'available'
+        ? `<span class="status-pill approved" style="font-size:10px">✅ Available</span>`
+        : `<span class="status-pill rejected" style="font-size:10px">❌ No Coverage</span>`;
+
       const card = document.createElement('div');
       card.className = 'admin-app-card';
       card.innerHTML = `
         <div class="aac-left">
           <div class="aac-user">👤 ${d.user_name || 'Unknown'} &nbsp;·&nbsp; <span style="font-size:11px;color:var(--text-muted)">${d.user_email || ''}</span></div>
           <div class="aac-address">📍 ${d.address || `${d.lat?.toFixed(5)}, ${d.lng?.toFixed(5)}`}</div>
-          <div class="aac-date">🕐 ${date}</div>
+          <div class="aac-meta-row">
+            <span class="aac-phone">📞 ${d.phone || '—'}</span>
+            <span class="aac-date">🕐 ${date}</span>
+          </div>
         </div>
         <div class="aac-right">
+          ${covBadge}
           <span class="status-pill ${d.status || 'pending'}">${d.status || 'pending'}</span>
           <select class="status-select" data-id="${d.id}">
             <option value="pending"  ${d.status === 'pending'  ? 'selected' : ''}>Pending</option>
@@ -327,6 +336,209 @@ async function loadApplications() {
 
 // Status filter
 document.getElementById('statusFilter').addEventListener('change', loadApplications);
+
+// ── Bulk Upload ───────────────────────────────────────────
+let bulkRows = []; // parsed valid rows
+
+function initBulkUpload() {
+  const dropZone    = document.getElementById('dropZone');
+  const fileInput   = document.getElementById('bulkFileInput');
+
+  // Click drop zone → trigger file input
+  dropZone.addEventListener('click', () => fileInput.click());
+
+  // Drag & drop
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) parseFile(file);
+  });
+
+  fileInput.addEventListener('change', e => {
+    if (e.target.files[0]) parseFile(e.target.files[0]);
+  });
+
+  document.getElementById('bulkRefreshPreview').addEventListener('click', renderPreview);
+
+  document.getElementById('bulkUploadBtn').addEventListener('click', uploadBulkDPs);
+
+  document.getElementById('bulkResetBtn').addEventListener('click', () => {
+    bulkRows = [];
+    fileInput.value = '';
+    document.getElementById('bulkPreviewCard').classList.add('hidden');
+    document.getElementById('bulkUploadCard').classList.add('hidden');
+    document.getElementById('bulkProgress').classList.add('hidden');
+    document.getElementById('bulkProgressFill').style.width = '0%';
+    document.getElementById('dropZone').style.borderColor = '';
+  });
+}
+
+function parseFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+
+  reader.onload = e => {
+    try {
+      let rows = [];
+
+      if (ext === 'csv') {
+        // Parse CSV manually
+        const text = e.target.result;
+        const lines = text.trim().split('\n');
+        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+        for (let i = 1; i < lines.length; i++) {
+          const vals = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+          const obj = {};
+          headers.forEach((h, idx) => obj[h] = vals[idx] || '');
+          rows.push(obj);
+        }
+      } else {
+        // Parse Excel with SheetJS
+        const data = new Uint8Array(e.target.result);
+        const wb   = XLSX.read(data, { type: 'array' });
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      }
+
+      // Normalise column names (case-insensitive)
+      bulkRows = rows.map((row, idx) => {
+        const keys = Object.keys(row);
+        const find = name => {
+          const k = keys.find(k => k.trim().toLowerCase() === name.toLowerCase());
+          return k ? String(row[k]).trim() : '';
+        };
+
+        const lat  = parseFloat(find('GPS_Lat')  || find('Lat') || find('Latitude'));
+        const lng  = parseFloat(find('GPS_Long') || find('GPS_Lng') || find('Long') || find('Longitude'));
+        const name = find('Name') || find('DP_Name') || '';
+        const radius = parseInt(find('Radius') || '0', 10) || 0;
+
+        const valid = !isNaN(lat) && !isNaN(lng)
+          && lat >= 20.5 && lat <= 26.8
+          && lng >= 87.9 && lng <= 92.8;
+
+        return { rowNum: idx + 2, lat, lng, name, radius, valid };
+      });
+
+      renderPreview();
+      document.getElementById('bulkPreviewCard').classList.remove('hidden');
+      document.getElementById('bulkUploadCard').classList.remove('hidden');
+    } catch (err) {
+      showToast('Failed to parse file: ' + err.message, 'error');
+    }
+  };
+
+  if (ext === 'csv') {
+    reader.readAsText(file);
+  } else {
+    reader.readAsArrayBuffer(file);
+  }
+}
+
+function renderPreview() {
+  const prefix     = document.getElementById('bulkNamePrefix').value.trim() || 'DP';
+  const defRadius  = parseInt(document.getElementById('bulkRadius').value, 10) || 100;
+  const validRows  = bulkRows.filter(r => r.valid);
+  const invalidRows= bulkRows.filter(r => !r.valid);
+
+  document.getElementById('bulkCount').textContent =
+    `${validRows.length} valid · ${invalidRows.length} skipped`;
+
+  const tableDiv = document.getElementById('bulkPreviewTable');
+  if (bulkRows.length === 0) { tableDiv.innerHTML = ''; return; }
+
+  let html = `<table>
+    <thead><tr>
+      <th>Row</th><th>Name</th><th>GPS_Lat</th><th>GPS_Long</th><th>Radius</th><th>Status</th>
+    </tr></thead><tbody>`;
+
+  bulkRows.forEach((r, i) => {
+    const name   = r.name || `${prefix}-${i + 1}`;
+    const radius = r.radius || defRadius;
+    const cls    = r.valid ? 'row-valid' : 'row-invalid';
+    const status = r.valid ? '✅ OK' : '❌ Invalid coords';
+    html += `<tr class="${cls}">
+      <td>${r.rowNum}</td>
+      <td>${r.valid ? name : '—'}</td>
+      <td>${isNaN(r.lat) ? r.lat || '—' : r.lat}</td>
+      <td>${isNaN(r.lng) ? r.lng || '—' : r.lng}</td>
+      <td>${r.valid ? radius + 'm' : '—'}</td>
+      <td>${status}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  tableDiv.innerHTML = html;
+}
+
+async function uploadBulkDPs() {
+  const prefix    = document.getElementById('bulkNamePrefix').value.trim() || 'DP';
+  const defRadius = parseInt(document.getElementById('bulkRadius').value, 10) || 100;
+  const validRows = bulkRows.filter(r => r.valid);
+
+  if (validRows.length === 0) {
+    showToast('No valid rows to upload', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('bulkUploadBtn');
+  btn.disabled = true;
+  btn.textContent = 'Uploading…';
+
+  const progressWrap = document.getElementById('bulkProgress');
+  const progressFill = document.getElementById('bulkProgressFill');
+  const progressText = document.getElementById('bulkProgressText');
+  progressWrap.classList.remove('hidden');
+
+  let uploaded = 0;
+  let failed   = 0;
+
+  // Upload in batches of 20 (Firestore batch limit is 500, but throttle for UX)
+  const BATCH_SIZE = 20;
+  for (let i = 0; i < validRows.length; i += BATCH_SIZE) {
+    const chunk = validRows.slice(i, i + BATCH_SIZE);
+    const batch = db.batch();
+
+    chunk.forEach((r, j) => {
+      const name   = r.name || `${prefix}-${i + j + 1}`;
+      const radius = r.radius || defRadius;
+      const ref    = db.collection(COL_DPS).doc();
+      batch.set(ref, {
+        name,
+        lat:        r.lat,
+        lng:        r.lng,
+        radius,
+        created_at: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    });
+
+    try {
+      await batch.commit();
+      uploaded += chunk.length;
+    } catch (err) {
+      failed += chunk.length;
+      console.error('Batch error:', err);
+    }
+
+    const pct = Math.round((uploaded + failed) / validRows.length * 100);
+    progressFill.style.width = pct + '%';
+    progressText.textContent = `Uploaded ${uploaded} of ${validRows.length}…`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = '⬆ Upload All DPs';
+
+  if (failed === 0) {
+    progressText.textContent = `✅ All ${uploaded} DPs uploaded successfully!`;
+    showToast(`✅ ${uploaded} DPs added to Firestore`, 'success');
+  } else {
+    progressText.textContent = `⚠️ ${uploaded} uploaded, ${failed} failed.`;
+    showToast(`Partial upload: ${failed} rows failed`, 'error');
+  }
+}
 
 // ── Settings ──────────────────────────────────────────────
 async function loadSettings() {
