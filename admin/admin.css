@@ -129,8 +129,7 @@ body.admin-body {
 }
 
 .tab-panel { display: none; }
-.tab-panel.active { display: block; }
-.tab-panel.hidden { display: none; }
+.tab-panel.active { display: block !important; }
 
 /* ── Panel header ─────────────────────────────────────── */
 .panel-header {
